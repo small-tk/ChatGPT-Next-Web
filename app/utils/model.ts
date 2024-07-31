@@ -1,9 +1,9 @@
 import { DEFAULT_MODELS } from "../constant";
 import { LLMModel } from "../client/api";
 
-const customProvider = (modelName: string) => ({
-  id: modelName,
-  providerName: "Custom",
+const customProvider = (providerName: string) => ({
+  id: providerName.toLowerCase(),
+  providerName: providerName,
   providerType: "custom",
 });
 
@@ -71,10 +71,17 @@ export function collectModelTable(
         }
         // 2. if model not exists, create new model with available value
         if (count === 0) {
-          const provider = customProvider(name);
-          modelTable[`${name}@${provider?.id}`] = {
-            name,
-            displayName: displayName || name,
+          let [customModelName, customProviderName] = name.split("@");
+          const provider = customProvider(
+            customProviderName || customModelName,
+          );
+          // swap name and displayName for bytedance
+          if (displayName && provider.providerName == "ByteDance") {
+            [customModelName, displayName] = [displayName, customModelName];
+          }
+          modelTable[`${customModelName}@${provider?.id}`] = {
+            name: customModelName,
+            displayName: displayName || customModelName,
             available,
             provider, // Use optional chaining
           };
@@ -92,12 +99,18 @@ export function collectModelTableWithDefaultModel(
 ) {
   let modelTable = collectModelTable(models, customModels);
   if (defaultModel && defaultModel !== "") {
-    modelTable[defaultModel] = {
-      ...modelTable[defaultModel],
-      name: defaultModel,
-      available: true,
-      isDefault: true,
-    };
+    if (defaultModel.includes('@')) {
+      if (defaultModel in modelTable) {
+        modelTable[defaultModel].isDefault = true;
+      }
+    } else {
+      for (const key of Object.keys(modelTable)) {
+        if (modelTable[key].available && key.split('@').shift() == defaultModel) {
+          modelTable[key].isDefault = true;
+          break;
+        }
+      }
+    }
   }
   return modelTable;
 }
